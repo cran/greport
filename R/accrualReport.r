@@ -13,6 +13,8 @@
 #' @param targetN integer vector with target sample sizes over time, same length as \code{targetDate}
 #' @param targetDate \code{Date} or character vector corresponding to \code{targetN}
 #' @param closeDate \code{Date} or characterstring.  Used for randomizations per month and per site-month - contains the dataset closing date to be able to compute the number of dates that a group (country, site, etc.) has been online since randomizating its first subject.
+#' @param enrollmax numeric specifying the upper y-axis limit for cumulative enrollment when not zoomed
+#' @param minrand integer.  Minimum number of randomized subjects a country must have before a box plot of time to randomization is included.
 #' @param panel character string.  Name of panel, which goes into file base names and figure labels for cross-referencing.
 #' @param h numeric.  Height of ordinary plots, in inches.
 #' @param w numeric.  Width of ordinary plots.
@@ -28,7 +30,7 @@
 accrualReport <-
   function(formula, data=NULL, subset=NULL, na.action=na.retain,
            dateRange=NULL, zoom=NULL, targetN=NULL, targetDate=NULL,
-           closeDate=NULL, panel = 'accrual',
+           closeDate=NULL, enrollmax=NULL, minrand=10, panel = 'accrual',
            h=2.5, w=3.75, hb=5, wb=5, hdot=3.5)
 {
   formula <- Formula(formula)
@@ -43,7 +45,8 @@ accrualReport <-
   assign(envir = en, "site",      f)
 
   file <- sprintf('%s/%s.tex', getgreportOption('texdir'), panel)
-  cat('', file=file)
+  if(getgreportOption('texwhere') == '') file <- ''
+   else cat('', file=file)
   
   ltt <- function(used, name='ltt')
       dNeedle(sampleFrac(used),
@@ -114,6 +117,10 @@ accrualReport <-
     z <- c(z, g(nsites, 0))
     k <- c(k, 'Sites')
   }
+  if(penroll) {
+    z <- c(z, sum(! is.na(Y[[enroll]])))
+    k <- c(k, 'Subjects enrolled')
+  }
 
   if(psite && prandomize) {
     rdate <- Y[[randomize]]
@@ -121,18 +128,30 @@ accrualReport <-
     persite <- nrand / nsites
     z <- c(z, c(nrand, g(persite, 1)))
     k <- c(k, c('Subjects randomized', 'Subjects per site'))
+    ## maxs = for each site the # months since that site first randomized
+    ##        a subject (NA if none randomized)
+    ## site months is sum of maxs
+    ## avg. months since first randomized = mean maxs excluding NAs
+    ## rand per site per month = # rand / site months
+    ## Note: # rand / # sites / avg. months != rand per site per month
+    ## because some sites have not randomized any subjects.  Such sites
+    ## are counted in # sites but not in site-months
     if(pclose) {
       months <- as.numeric(difftime(closeDate, rdate, units='days')) /
         (365.25 / 12)
-      maxs       <- tapply(months, Site, max, na.rm=TRUE)
+      mx <- function(x) if(! length(x) || all(is.na(x))) NA
+       else max(x, na.rm=TRUE)
+      maxs       <- tapply(months, Site, mx)
       sitemonths <- sum(maxs, na.rm=TRUE)
       z <- c(z, g(max(months, na.rm=TRUE), 1),
+                g(sitemonths, 1),
                 g(mean(maxs, na.rm=TRUE), 1),
                 g(nrand / sitemonths, 2))
       k <- c(k, paste('Months from first subject randomized (',
                       format(min(rdate, na.rm=TRUE)), ') to ',
                       format(closeDate), sep=''),
-                'Average months a site is online',
+                'Site-months for sites randomizing',
+                'Average months since a site first randomized',
                 'Subjects randomized per site per month')
     }
   }
@@ -155,7 +174,7 @@ accrualReport <-
     y <- y[! is.na(y)]
     target <- if(! length(names(targetN))) targetN else targetN[[nam]]
     dtarget <- targetDate
-    if(min(target) > 0) {
+    if(length(target) && min(target) > 0) {
       target <- c(0, target)
       dtarget <- c(dr[1], dtarget)
     }
@@ -170,7 +189,9 @@ accrualReport <-
          ylab='Cumulative Number',
          subtitles=FALSE, axes=FALSE,
          xlim=dr,
-         ylim=c(0, if(length(target)) max(length(y), target) else length(y)))
+         ylim=c(0, if(length(target)) max(length(y), target)
+          else if(lab == 'enrolled' && length(enrollmax)) enrollmax
+          else length(y)))
     axis(2)
     axis.Date(1, at=seq(dr[1], dr[2], by='year'))
     axis.Date(1, at=seq(dr[1], dr[2], by='month'),
@@ -222,12 +243,24 @@ accrualReport <-
     y <- as.numeric(difftime(Y[[j]], Y[[enroll]], units='days'))
     x1 <- if(pregion)  X[[region]]
     x2 <- if(pcountry) X[[country]]
+    use <- TRUE
+    coexcl <- 0
+    if(pcountry && minrand > 0) {
+      ## Exclude countries randomizing fewer than minrand subject
+      nrn <- tapply(y, x2, function(x) sum(! is.na(x)))
+      if(any(nrn < minrand)) {
+        coexcl <- sum(nrn < minrand)
+        countrieskeep <- names(nrn)[nrn >= minrand]
+        use <- x2 %in% countrieskeep
+      }
+    }
     form <- if(length(x1) && length(x2)) x2 ~ y | x1
      else if(length(x1)) x1 ~ y
      else if(length(x2)) x2 ~ y
      else x2 ~ 1
     print(bwplot(form, panel=panel.bpplot, xlab='Days to Randomization',
-                 scales=list(y='free'),
+                 subset=use,
+                 scales=list(y='free', rot=c(0,0)),
                  violin=TRUE,
                  violin.opts=list(col=adjustcolor('blue', alpha.f=.35),
                                   border=FALSE)))
@@ -247,8 +280,12 @@ accrualReport <-
     legend <- if(! length(legend)) ''
      else paste('. ', paste(legend, collapse='\n'), sep='')
 
+    excc <- if(coexcl > 0) paste('.', coexcl, 'countries with fewer than',
+                                 minrand, 'randomized subjects are not shown.')
+    else ''
     putFig(panel=panel, name=lb,
-           longcaption='\\protect\\eboxpopup{Extended box} plots and violin plots showing the distribution of days from enrollment to randomization~\\hfill\\lttc',
+           longcaption=paste('\\protect\\eboxpopup{Extended box} plots and violin plots showing the distribution of days from enrollment to randomization',
+             excc, '~\\hfill\\lttc', sep=''),
            caption='Days from enrollment to randomization',
            tcaption='Days from enrollment to randomization',
            tlongcaption=paste('Days from enrollment to randomization',

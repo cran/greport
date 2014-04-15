@@ -82,6 +82,7 @@ mfrowSuggest <- function(n, small=FALSE) {
 #'  \item{\code{gtype}:}{graphics type, \code{"pdf"} or \code{"interactive"}}
 #'  \item{\code{pdfdir}:}{name of subdirectory in which to write \code{pdf} graphics}
 #'  \item{\code{texdir}:}{name of subdirectory in which to write \code{LaTeX} code}
+#'  \item{\code{texwhere}:}{default is \code{"texdir"} to use location specified by \code{texdir}.  Set to \code{""} to write generated non-appendix LaTeX code to the console as expected by \code{knitr}}
 #' }
 setgreportOption <- function(...) {
   default <- getOption('greport')
@@ -92,7 +93,8 @@ setgreportOption <- function(...) {
                     tx.var = '', en.col = NULL,
                     denom = c(enrolled=NA, randomized=NA),
                     tablelink = 'hyperref', figenv='figure', figpos='htb!',
-                    gtype = 'pdf', pdfdir='pdf', texdir='gentex')
+                    gtype = 'pdf', pdfdir='pdf', texdir='gentex',
+                    texwhere='texdir')
   opts <- list(...)
   if(length(opts)) {
     if(any(names(opts) %nin% names(default)))
@@ -260,6 +262,7 @@ putFig <- function(panel, name, caption=NULL, longcaption=NULL,
   o <- getgreportOption()
   gtype     <- o$gtype
   texdir    <- o$texdir
+  texwhere  <- o$texwhere
   tablelink <- o$tablelink
   figenv    <- o$figenv
   figpos    <- o$figpos
@@ -273,6 +276,7 @@ putFig <- function(panel, name, caption=NULL, longcaption=NULL,
   panel <- translate(panel, '\\.', '-')
   name  <- translate(name,  '\\.', '-')
   file  <- sprintf('%s/%s.tex', texdir, panel)
+  if(texwhere == '') file <- ''
 
   ## if(length(caption)) caption <- latexTranslate(caption)
   ## if(length(longcaption)) longcaption <- latexTranslate(longcaption)
@@ -410,7 +414,8 @@ upFirst <- function(txt) {
                 'to', 'toward', 'towards', 'under', 'underneath',
                 'unlike', 'until', 'up', 'upon', 'via', 'vs.', 'when',
                 'with', 'within', 'without', 'worth', 'yet')
-  cap <- c('mi', 'gi', 'ecg', 'ekg', 'cad', 'ccta', 'lm')
+  cap <- c('mi', 'gi', 'ecg', 'ekg', 'cad', 'ccta', 'lm', 'hf', 'i', 'ii',
+           'iii', 'iv', 'iii-iv', 'ii-iv', 'i-iv', 'nyha')
   s <- strsplit(tolower(x), " ")[[1]]
   w <- (1 : length(s)) == 1 | s %nin% notcap
   s[w] <- paste(toupper(substring(s[w], 1,1)), substring(s[w], 2),
@@ -423,13 +428,13 @@ upFirst <- function(txt) {
   txt
 }
 
-#' Merge Multiple Data Frames
+#' Merge Multiple Data Frames or Data Tables
 #'
-#' Merges an arbitrarily large series of data frames containing common \code{id} variables.  Information about number of observations and number of unique \code{id}s in individual and final merged datasets is printed.  The first data frame has special meaning in that all of its observations are kept whether they match \code{id}s in other data frames or not.  For all other data frames, by default non-matching observations are dropped.  The first data frame is also the one against which counts of unique \code{id}s are compared.  Sometimes \code{merge} drops variable attributes such as \code{labels} and \code{units}.  These are restored by \code{Merge}.
+#' Merges an arbitrarily large series of data frames or data tables containing common \code{id} variables (keys for data tables).  Information about number of observations and number of unique \code{id}s in individual and final merged datasets is printed.  The first data frame has special meaning in that all of its observations are kept whether they match \code{id}s in other data frames or not.  For all other data frames, by default non-matching observations are dropped.  The first data frame is also the one against which counts of unique \code{id}s are compared.  Sometimes \code{merge} drops variable attributes such as \code{labels} and \code{units}.  These are restored by \code{Merge}.  If all objects are of class \code{data.table}, faster merging will be done using the \code{data.table} package's join operation.  This assumes that all objects have identical key variables and those of the variables on which to merge.
 #'
-#' @param \dots two or more dataframes
-#' @param id a formula containing all the identification variables such that the combination of these variables uniquely identifies subjects or records of interest
-#' @param all set to \code{FALSE} to drop observations not found in second and later data frames
+#' @param \dots two or more dataframes or data tables
+#' @param id a formula containing all the identification variables such that the combination of these variables uniquely identifies subjects or records of interest.  May be omitted for data tables; in that case the \code{key} function retrieves the id variables.
+#' @param all set to \code{FALSE} to drop observations not found in second and later data frames (only applies if not using \code{data.table})
 #' @param verbose set to \code{FALSE} to not print information about observations
 #' @export
 #' @examples
@@ -437,6 +442,14 @@ upFirst <- function(txt) {
 #' b <- data.frame(sid=c(1,2,2), bp=c(120,130,140))
 #' d <- data.frame(sid=c(1,3,4), wt=c(170,180,190))
 #' all <- Merge(a, b, d, id = ~ sid)
+#' # For data.table, first file must be the master file and must
+#' # contain all ids that ever occur.  ids not in the master will
+#' # not be merged from other datasets.
+#' a <- data.table(a); setkey(a, sid)
+#' # data.table also does not allow duplicates without allow.cartesian=TRUE
+#' b <- data.table(sid=1:2, bp=c(120,130)); setkey(b, sid)
+#' d <- data.table(d); setkey(d, sid)
+#' all <- Merge(a, b, d)
 
 Merge <- function(..., id, all=TRUE, verbose=TRUE) {
   w <- list(...)
@@ -445,18 +458,20 @@ Merge <- function(..., id, all=TRUE, verbose=TRUE) {
   ## If argument is a function call, e.g., subset(mydata, age > 20)
   ## find name of first argument and omit any dollar sign prefix and []
   for(i in 1 : m) {
-    x <- nams[i]
+    x <-       nams[i]
     x <-       gsub('subset\\(',   '', x)
     x <-       gsub(',.*',         '', x)
     x <-       gsub('\\[.*'  ,     '', x)
     nams[i] <- gsub('(.*)\\$(.*)', '\\2', x)
   }
-  id <- all.vars(id)
+  d1   <- w[[1]]
+  idt  <- is.data.table(d1)
+  id   <- if(idt) key(d1) else all.vars(id)
   m <- length(w)
   va <- n <- nu <- integer(m)
   nin1 <- nnin1 <- rep(NA, m)
-  d1   <- w[[1]]
-  idc1 <- unique(as.character(interaction(d1[id])))
+  did <- if(idt) d1[, id, with=FALSE] else d1[id]
+  idc1 <- unique(as.character(interaction(did)))
   id.union <- id.intersection <- idc1
   ## Unique variables, and their labels and units
   uvar <- lab <- un <- character(0)
@@ -470,8 +485,14 @@ Merge <- function(..., id, all=TRUE, verbose=TRUE) {
     uvar <- c(uvar, nd[j])
     lab  <- c(lab,  sapply(d, label)[j])
     un   <- c(un,   sapply(d, units)[j])
-    M <- if(i == 1) d else merge(M, d, by=id, all.x=TRUE, all.y=all)
-    idc <- unique(as.character(interaction(d[id])))
+    idt <- is.data.table(d)
+    M <- if(i == 1) d
+    else
+      if(idt) d[M]
+    else
+      merge(M, d, by=id, all.x=TRUE, all.y=all)
+    did <- if(idt) d[, id, with=FALSE] else d[id]
+    idc <- unique(as.character(interaction(did)))
     di <- dim(d)
     va[i] <- di[2]
     n [i] <- di[1]
@@ -508,7 +529,8 @@ Merge <- function(..., id, all=TRUE, verbose=TRUE) {
   nams  <- c(nams, 'Merged')
   va    <- c(va, ncol(M))
   n     <- c(n, nrow(M))
-  idc   <- unique(as.character(interaction(M[id])))
+  did   <- if(is.data.table(M)) M[, id, with=FALSE] else M[id]
+  idc   <- unique(as.character(interaction(did)))
   nu    <- c(nu, length(unique(idc)))
   nin1  <- c(nin1,  sum(idc %in%  idc1))
   nnin1 <- c(nnin1, sum(idc %nin% idc1))

@@ -3,6 +3,7 @@
 \documentclass{article}
 \usepackage{fancyhdr}
 \usepackage{graphicx}
+\usepackage{chngpage}   % for exReport \begin{adjustwidth}
 
 \def\titl{DSMB Report for EXAMPLE Trial}
 
@@ -80,7 +81,7 @@ denom <- c(enrolled=nrow(d) * 1.1,
            randomized=sum(!is.na(d$rdate)) + 10)
 
 setgreportOption(gtype=c('pdf', 'interactive')[1], # [2] to debug
-                 tx.var='treat', denom=denom)
+                 tx.var='treat', denom=denom, texwhere='')
 
 ## Initialize app.tex
 file <- sprintf('%s/app.tex', getgreportOption('texdir'))
@@ -174,7 +175,7 @@ survival estimates, without any multiplicity correction.
 
 \section{Accrual}
 
-<<>>=
+<<accrual,results='asis'>>=
 accrualReport(enroll(edate) + randomize(rdate) ~
               region(region) + country(country) + site(site),
               data=d, hdot=3,
@@ -185,11 +186,10 @@ accrualReport(enroll(edate) + randomize(rdate) ~
               zoom=c('2005-01-01', '2005-06-30'),
               closeDate='2007-12-31')
 @ 
-\input{gentex/accrual}
 \clearpage
 
 \section{Patient Flow and Exclusions}
-<<>>=
+<<exclusions,results='asis'>>=
 d <- upData(d,
             subjid = 1 : n,
             pend   = rbinom(n, 1, .1),
@@ -224,11 +224,10 @@ exReport(~ pending(pend) + e1 + e2 + e3 + e4 + e5 + e6 + e7 +
          whenapp=c(e4='CCTA done'), data=d, hc=3.75, h=4,
          sort=FALSE, append=TRUE, subpanel='unsorted', app=FALSE)
 @ 
-\input{gentex/excl}
 \clearpage
 
 \section{Baseline Variables}
-<<>>=
+<<baseline,results='asis'>>=
 n <- 100
 f <- function(na=FALSE) {
   x <- sample(c('N', 'Y'), n, TRUE)
@@ -246,8 +245,9 @@ d <- data.frame(x1=f(), x2=f(), x3=f(), x4=f(), x5=f(), x6=f(),
                 sex=sample(c('Female', 'Male'), n, TRUE),
                 treat=sample(c('A', 'B'), n, TRUE),
                 region=sample(c('North America','Europe'), n, TRUE),
-                meda=sample(0:1, n, TRUE), medb=sample(0:1, n, TRUE))
-
+                meda=sample(0:1, n, TRUE), medb=sample(0:1, n, TRUE),
+                subjid=1:n)
+d$days[1] <- NA
 d <- upData(d, labels=c(x1='MI', x2='Stroke', x3='AKI', x4='Migraines',
                  x5='Pregnant', x6='Other event', x7='MD withdrawal',
                  race='Race', sex='Sex', treat='treatment',
@@ -336,10 +336,9 @@ dReport(sbp ~ treat + region, data=d,
         popts = list(textplot='Mean', digits=1),
         append=TRUE, subpanel='stats', h=3, w=5)
 @ 
-\input{gentex/desc}
 \clearpage
 \section{Medication Usage Over Time}
-<<>>=
+<<meds,results='asis'>>=
 pan <- function(...)
   panel.plsmo(..., type='l', label.curves=max(which.packet()) == 1,
               datadensity=TRUE)
@@ -351,11 +350,19 @@ dReport(meda + medb ~ days + treat + region, what='xy',
         head='Medication usage',
         tail='Tick marks indicate observed measurement times.',
         panel='meds')
+
+# Show number being followed as days since randomization gets larger
+# make sure nriskReport doesn't get fooled by duplicate data
+d2 <- rbind(d, d)
+nriskReport(days ~ region + id(subjid),
+            data=addMarginal(d2, region),
+            head='Number of subjects followed for medication usage',
+            panel='meds', append=TRUE, h=3, w=4.5)
 @ 
-\input{gentex/meds}
 \clearpage
+
 \section{Time to Hospitalization and Surgery}
-<<>>=
+<<hospsurg,results='asis'>>=
 set.seed(1)
 n <- 400
 dat <- data.frame(t1=runif(n, 2, 5), t2=runif(n, 2, 5),
@@ -377,13 +384,12 @@ survReport(Surv(t1, e1) + Surv(t2, e2) ~ treat, data=dat,
 survReport(Surv(t1, e1) + Surv(t2, e2) ~ treat, data=dat,
            multi=TRUE, subpanel='multi', append=TRUE, ps=9, what='1-S')
 @ 
-\input{gentex/surv}
 
 \section{Adverse Events}
 For this example, the denominators for the two treatments in the
 pop-up needles will be incorrect because the dataset did not have
 subject IDs.
-<<>>=
+<<aes,results='asis'>>=
 # Original source of aeanonym: HH package
 # aeanonym <- read.table(hh("datasets/aedotplot.dat"), header=TRUE, sep=",")
 # Modified to remove denominators from data and to generate raw data
@@ -424,7 +430,6 @@ label(ae$treat) <- 'Treatment'
 
 eReport(event ~ treat, data=ae, minincidence=.05)
 @ 
-\input{gentex/events}
 \clearpage   % needed to get last tooltips to work
 
 \section{Appendix: Supporting Tables}
