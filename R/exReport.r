@@ -18,6 +18,7 @@
 #' @param subpanel If calling \code{exReport} more than once (e.g., for different values of \code{sort}), specify \code{subpanel} to distinguish the multiple calls.  In that case, \code{-subpanel} will be appended to \code{panel} when creating figure labels and cross-references.
 #' @param head character string.  Specifies initial text in the figure caption, otherwise a default is used.
 #' @param tail a character string to add to end of automatic caption
+#' @param apptail a character string to add to end of automatic caption for appendix table with listing of subject IDs
 #' @param h height of 2-panel graph
 #' @param w width of 2-panel graph
 #' @param hc height of cumulative exclusion 1-panel graph
@@ -35,9 +36,14 @@ exReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
                      ignoreExcl=NULL, ignoreRand=NULL,
                      autoother=FALSE, sort=TRUE, whenapp=NULL, erdata=NULL,
                      panel='excl', subpanel=NULL, head=NULL, tail=NULL,
-                     h=5.5, w=6.5, hc=4.5, wc=5,
+                     apptail=NULL, h=5.5, w=6.5, hc=4.5, wc=5,
                      adjustwidth='-0.75in',
                      append=FALSE, popts=NULL, app=TRUE) {
+
+  if(grepl('[^a-zA-Z-]', panel))
+    stop('panel must contain only A-Z a-z -')
+  if(length(subpanel) && grepl('[^a-zA-Z-]', subpanel))
+    stop('subpanel must contain only A-Z a-z -')
 
   file <- sprintf('%s/%s.tex', getgreportOption('texdir'), panel)
   if(getgreportOption('texwhere') == '') file <- ''
@@ -164,7 +170,8 @@ exReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
       exclv <- c(exclv, 'Total Subjects with Any Exclusion')
       nexr   <- c(nexr, nnre)
       if(length(Ids)) Ids <- c(Ids, '')
-      E <- data.frame(Exclusion=latexTranslate(exclv), Frequency=nexr)
+#      E <- data.frame(Exclusion=latexTranslate(exclv), Frequency=nexr)
+      E <- data.frame(Exclusion=exclv, Frequency=nexr)
     }
   }
 
@@ -323,7 +330,8 @@ exReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
   ct <- function(...) cat(..., sep='', file=file, append=TRUE)
   
   ct('\\begin{table}[htbp]\\small\n',
-     '\\caption[Exclusions]{Exclusions.  \\texttt{Incremental Exclusions} are those in addition to exclusions in earlier rows.  \\texttt{Marginal Exclusions} are numbers of subjects excluded for the indicated reason whether or not she was excluded for other reasons.  The three \\texttt{Fractions} are based on incremental exclusions.\\label{tab:exclstats', subp, '}}\n',
+     '\\caption[Exclusions]{Exclusions.  \\texttt{Incremental Exclusions} are those in addition to exclusions in earlier rows.  \\texttt{Marginal Exclusions} are numbers of subjects excluded for the indicated reason whether or not she was excluded for other reasons.  The three \\texttt{Fractions} are based on incremental exclusions.', if(length(tail))' ', tail,
+     '\\label{tab:exclstats', subp, '}}\n',
      '\\begin{center}\\begin{adjustwidth}{', adjustwidth, '}{',
      adjustwidth, '}\n',
      '\\begin{tabular}{lrrrrr}\\hline\\hline\n',
@@ -441,13 +449,15 @@ exReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
                    rowname=NULL, col.just=c('l', 'r'),
                    caption=cap, caption.lot=scap, where='htbp')
     if(app && length(Ids)) {
-      cat('\\begin{table}[htbp]\\caption{Subject IDs for randomized subjects with exclusions}\\label{tab:randsubjexcl', subp, '}\n\\medskip%\n',
+      if(length(apptail)) apptail <- paste('.', apptail)
+      cat('\\begin{table}[htbp]\\caption{Subject IDs for randomized subjects with exclusions', apptail, '}\\label{tab:randsubjexcl', subp, '}\n\\medskip%\n',
           sep='', file=appfile, append=TRUE)
       cat(sprintf('\\hyperref[tab:exclrand%s]{$\\leftarrow$}\n\n', subp),
           file=appfile, append=TRUE)
       le <- length(nexr) - 1
       for(i in 1 : le) {
-        cat('\\textbf{', as.character(E$Exclusion[i]), '}:\\\\\n',
+        cat('\\textbf{', latexTranslate(as.character(E$Exclusion[i])),
+            '}:\\\\\n',
             file=appfile, append=TRUE, sep='')
         cat('\\parbox{5in}{', Ids[i], '}',
             if(i < le) '\\\\\n', sep='',
@@ -456,10 +466,10 @@ exReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
       if(length(erdata)) {
         erd <- erdata[as.character(interaction(erdata[Idnames]))
                       %in% Idso, ]
-        colnames(erd) <- latexTranslate(colnames(erd))
+#        colnames(erd) <- latexTranslate(colnames(erd))
         z <- function(x) ifelse(is.na(x), '', as.character(x))
-        for(j in 1 : ncol(erd))
-          erd[[j]] <- latexTranslate(z(erd[[j]]))
+#        for(j in 1 : ncol(erd))
+#          erd[[j]] <- latexTranslate(z(erd[[j]]))
         z <- latex(erd, file=appfile, append=TRUE, rowname=NULL,
                    table.env=FALSE, na.blank=TRUE)
       }
