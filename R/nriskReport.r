@@ -47,7 +47,7 @@ nriskReport <-
   labs    <- ifelse(labs == '', xnam, labs)
   id <- Nobs$id
 
-  if(length(id) && any(duplicated(id))) {
+  if(length(id) && anyDuplicated(id)) {
     ## Reduce data matrix to one row per subject per stratum with
     ## maximum follow-up time
     X <- data.table(X, .id.=id)
@@ -62,7 +62,7 @@ nriskReport <-
   x1      <- X[[1]]
   xunits  <- units(x1)
   if(xunits == '') xunits <- 'days'
-  sl <- if(ncol(X) > 1) tolower(labs[-1])
+  sl <- if(ncol(X) > 1) upFirst(labs[-1], lower=TRUE)
 
   file <- sprintf('%s/%s.tex', getgreportOption('texdir'), panel)
   if(getgreportOption('texwhere') == '') file <- ''
@@ -124,7 +124,7 @@ nriskReport <-
 #      levs <- if(current.var == 'time') lev else factor.levels
 #      strip.default(which.given, which.panel, var.name, factor.levels=levs, ...#)
 #    }
-    p <- useOuterStrips(p) #, strip=strip, strip.left=strip)
+    p <- latticeExtra::useOuterStrips(p) #, strip=strip, strip.left=strip)
   }
 
   startPlot(lb, h=h, w=w)

@@ -1,3 +1,25 @@
+Changes in version 0.5-3 (2015-04-20)
+   * putFig: add \clearpage after every appendix table
+   * exReport: fine-tuned vertical dot plot
+   * dReport: rotated strip labels
+   * Added new greport option nontx.col and use that in other functions, for non-treatment groups
+   * dReport: changed strip label font size
+   * dReport: run ggplot.summaryP output through colorFacet (new in Hmisc)
+   * upFirst: leave all words with > 1 upper case letter unchanged (for acronyms)
+   * accrualReport: changed denominator to randomized subjects for table corresponding to box plots of days to randomization
+   * all reporting functions: use upFirst(lower=TRUE) for captions
+   * appsection: new function
+   * sampleFrac: capped fraction at 1.0, issued warning if > 1 and assumes this indicates that analysis is to compare randomized with non-randomized subjects
+   * test.Rnw, report.Rnw: switch to using changepage style instead of chngpage
+   * Misc: use gsub instead of translate()
+   * survReport: added aehaz argument, fixed caption for when differences don't apply (no strata)
+   * startPlot: ignored non-par parameters in ...
+   * survReport: changed default y.n.risk to 0 (used if what='1-S')
+   * exReport: added short caption when using app
+   * survReport: added times argument
+   * nriskReport: changed any(duplicated()) to anyDuplicated()
+
+
 Changes in version 0.5-2 (2014-11-21)
    * accrualReport: axis.Date was not positioning axis labels containing only 4-digit years at Jan 1 so wrote customized axisDate function
    * Better escaping of special characters

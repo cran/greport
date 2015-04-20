@@ -71,10 +71,12 @@ mfrowSuggest <- function(n, small=FALSE) {
 #'  \item{\code{tx.pch}:}{symbols corresponding to treatments}
 #'  \item{\code{tx.col}:}{colors corresponding to treatments}
 #'  \item{\code{tx.linecol}:}{colors for lines in line plots}
+#'  \item{\code{nontx.col}:}{colors for categories other than treatments}
 #'  \item{\code{tx.lty}:}{line types corresponding to treatments}
 #'  \item{\code{tx.lwd}:}{line widths corresponding to treatments}
 #'  \item{\code{tx.var}:}{character string name of treatment variable}
 #'  \item{\code{er.col}:}{2-vector with names \code{"enrolled","randomized"} containing colors to use for enrolled and randomized in needle displays}
+#'  \item{\code{alpha.f}:}{single numeric specifying alpha adjustment to be applied to all colors.  Default is 0.7}
 #'  \item{\code{denom}:}{named vector with overall sample sizes}
 #'  \item{\code{tablelink}:}{a character string, either \code{"tooltip"} or \code{"hyperref"} (the default); use the latter to make supporting data tables be hyperlinked to tables in the appendix rather than using a pop-up tooltip}
 #' \item{\code{figenv}:}{LaTeX figure environment to use, default is \code{"figure"}.  Use \code{figenv="SCfigure"} if using the LaTeX \code{sidecap} package.  \code{SCfigure} is only used for narrow images, by calling \code{putFig} with \code{sidecap=TRUE}.}
@@ -86,16 +88,23 @@ mfrowSuggest <- function(n, small=FALSE) {
 #' }
 setgreportOption <- function(...) {
   default <- getOption('greport')
-  if(! length(default))
-    default <- list(tx.pch = 16:17, tx.col = c('black', '#0080ff'),
-                    tx.linecol = c('black', '#0080ff'),
-                    tx.lty = c(1, 1), tx.lwd = c(1, 2),
-                    tx.var = '', en.col = NULL,
-                    denom = c(enrolled=NA, randomized=NA),
-                    tablelink = 'hyperref', figenv='figure', figpos='htb!',
-                    gtype = 'pdf', pdfdir='pdf', texdir='gentex',
-                    texwhere='texdir')
   opts <- list(...)
+  alpha.f <- if(length(opts$alpha.f)) opts$alpha.f else 0.7
+  if(! length(default))
+    default <-
+      list(tx.pch = 16:17,
+           tx.col = adjustcolor(c('black', '#0080ff'), alpha.f=alpha.f),
+           tx.linecol = adjustcolor(c('black', '#0080ff'), alpha.f=alpha.f),
+           nontx.col = adjustcolor(c("#1b9e77", "#d95f02", "#7570b3", "#e7298a",
+             "#66a61e", "#e6ab02", "#a6761d", "#666666"),
+             alpha.f=alpha.f),  ## see colorbrewer2.org
+           tx.lty = c(1, 1), tx.lwd = c(1, 2),
+           tx.var = '', er.col = NULL, alpha.f = 0.7,
+           denom = c(enrolled=NA, randomized=NA),
+           tablelink = 'hyperref', figenv='figure', figpos='htb!',
+           gtype = 'pdf', pdfdir='pdf', texdir='gentex',
+           texwhere='texdir')
+
   if(length(opts)) {
     if(any(names(opts) %nin% names(default)))
       stop(paste('greport options must be one of the following:',
@@ -106,10 +115,11 @@ setgreportOption <- function(...) {
   if(any(i) && sum(opts$denom[i]) != opts$denom['randomized'])
     stop('sum of # subjects randomized to each treatment must = total number randomized')
   if(! length(default$er.col))
-    default$er.col <- setdiff(c('red', 'green', "#0080ff", "#ff00ff",
-                                "darkgreen", "#ff0000", "orange", "#00ff00",
-                                "brown"),
-                              default$tx.col)[1 : 2]
+    default$er.col <-
+      adjustcolor(setdiff(c('red', 'green', "#0080ff", "#ff00ff",
+                            "darkgreen", "#ff0000", "orange", "#00ff00",
+                            "brown"),
+                          default$tx.col)[1 : 2], alpha.f=alpha.f)
   options(greport = default)
   invisible()
 }
@@ -122,21 +132,26 @@ latticeInit <- function() {
   opt <- getOption('greport')
 
   tx.col <- opt$tx.col
+  nontx.col <- opt$nontx.col
   tx.pch <- opt$tx.pch
   tx.lty <- opt$tx.pty
   tx.lwd <- opt$tx.lwd
+  alpha.f <- opt$alpha.f
   w <- trellis.par.get('dot.symbol')
   w$col <- tx.col[1]
   w$pch <- tx.pch[1]
   trellis.par.set(dot.symbol=w)
   w <- trellis.par.get('superpose.symbol')
-  w$col <- rep(c(tx.col, setdiff(w$col, tx.col)), length=length(w$col))
+  # w$col <- adjustcolor(w$col, alpha.f=alpha.f)
+  # w$col <- rep(c(tx.col, setdiff(w$col, tx.col)), length=length(w$col))
+  w$col <- rep(c(tx.col, nontx.col), length=length(w$col))
   w$pch <- rep(c(tx.pch,
                  setdiff(c(1, 2, 3, 4, 5, 6, 16, 17, 15, 18, 20), tx.pch)),
                length=length(w$pch))
   trellis.par.set(superpose.symbol=w)
   w <- trellis.par.get('superpose.line')
-  w$col <- rep(c(tx.col, setdiff(w$col, tx.col)), length=length(w$col))
+  # w$col <- adjustcolor(w$col, alpha.f=alpha.f)
+  w$col <- rep(c(tx.col, nontx.col), length=length(w$col))
   w$lty <- rep(c(tx.lty, w$lty), length=length(w$lty))
   w$lwd <- rep(c(tx.lwd, w$lwd), length=length(w$lwd))
   trellis.par.set(superpose.line=w)
@@ -196,6 +211,8 @@ sampleFrac <- function(n, nobsY=NULL, table=TRUE) {
   if(any(names(n) != names(denom)))
     stop('n does not have same names as denom in the same order')
   f <- n / denom
+  if(any(f > 1.)) warning('A sample fraction > 1.0; assuming analysis is to compare randomized and non-randomized subjects\nfraction capped at 1.0')
+  f <- pmin(f, 1.)
   if(! table) return(f)
   tab <- data.frame(upFirst(names(n)), denom, n)
   tab <- latexTabular(tab, align = 'lrr', translate=FALSE, hline=1,
@@ -252,13 +269,14 @@ dNeedle <- function(sf, name, file='', append=TRUE) {
 #' @param poptable an optional character string containing LaTeX code that will be used as a pop-up tool tip for the figure (typically a tabular)
 #' @param popfull set to \code{TRUE} to make the pop-up be full-page
 #' @param sidecap set to \code{TRUE} (only applies if \code{greportOption(figenv="SCfigure")}) to assume the figure is narrow and to use side captions
+#' @param outtable set to \code{TRUE} to only have the caption and hyperlink to graphics in a LaTeX table environment and to leave the tabulars to free-standing LaTeX markup.  This is useful when the table is long, to prevent hyperlinking from making the table run outside the visable area.  Instead of the hyperlink area being the whole table, it will be the caption.  A \code{clearpage} is issued after the tabular.
 #' @param append logical. If \sQuote{TRUE} output will be appended instead of overwritten.
 #' @export
 
 putFig <- function(panel, name, caption=NULL, longcaption=NULL,
                    tcaption=caption, tlongcaption=NULL,
                    poptable=NULL, popfull=FALSE, sidecap=FALSE,
-                   append=TRUE) {
+                   outtable=FALSE, append=TRUE) {
   o <- getgreportOption()
   gtype     <- o$gtype
   texdir    <- o$texdir
@@ -273,8 +291,8 @@ putFig <- function(panel, name, caption=NULL, longcaption=NULL,
   bcenter <- if(figenv == 'figure') '\\centerline{' else ''
   ecenter <- if(figenv == 'figure') '}' else ''
   
-  panel <- translate(panel, '\\.', '-')
-  name  <- translate(name,  '\\.', '-')
+  panel <- gsub('\\.', '-', panel)
+  name  <- gsub('\\.', '-', name)
   file  <- sprintf('%s/%s.tex', texdir, panel)
   if(texwhere == '') file <- ''
 
@@ -312,9 +330,13 @@ putFig <- function(panel, name, caption=NULL, longcaption=NULL,
     ref <- if(length(caption))
       sprintf(' {\\smaller (Figure \\ref{fig:%s})}.', name)
     else ''
+    ## linkfromtab <- if(outtable)
+    ##    sf('\\hyperref[fig:%s]{~\\textcolor[gray]{0.5}{$\\mapsto$}}', name)
+    ##  else ''
     tcap <- if(length(tlongcaption))
       sf('\\caption[%s]{%s%s}', tcaption, tlongcaption, ref)
-    else if(length(tcaption)) sf('\\caption[%s]{%s%s}', tcaption, tcaption, ref)
+    else if(length(tcaption)) sf('\\caption[%s]{%s%s}', tcaption, tcaption,
+                                 ref)
     else sprintf('\\caption{%s}', ref)
     cat(sf('\\begin{%s}[%s]\\hyperref[tab:%s]{\\leavevmode%s\\includegraphics{%s.pdf}%s}', figenv, figpos, name, bcenter, name, ecenter),
         file=file, append=append)
@@ -330,9 +352,14 @@ putFig <- function(panel, name, caption=NULL, longcaption=NULL,
         file=file, append=TRUE)
     appfile <- sprintf('%s/app.tex', texdir)
 
-    cat(sf('\\begin{table}[%s]%s%s\\hyperref[fig:%s]{%s}\\end{table}\n\n',
-           figpos, tcap, tlab, name, poptable),
+    if(outtable)
+      cat(sf('\\clearpage\\begin{table}[%s]%s%s\\end{table}\n%s\\clearpage\n\n',
+           figpos, tcap, tlab, poptable),
         file=appfile, append=TRUE)
+    else
+      cat(sf('\\begin{table}[%s]%s%s\\hyperref[fig:%s]{%s}\\end{table}\\clearpage\n\n',
+             figpos, tcap, tlab, name, poptable),
+          file=appfile, append=TRUE)
   }
   invisible()
 }
@@ -352,7 +379,7 @@ startPlot <- function(file, h=7, w=7, lattice=TRUE, ...) {
   gtype <- getgreportOption('gtype')
   pdfdir <- getgreportOption('pdfdir')
   if(! length(gtype) || gtype != 'interactive') {
-    file <- paste(pdfdir, '/', translate(file,'.','-'), '.pdf', sep='')
+    file <- paste(pdfdir, '/', gsub('\\.', '-', file), '.pdf', sep='')
     pdf(file, height=h, width=w)
   }
   if(! existsFunction('spar'))
@@ -372,8 +399,10 @@ startPlot <- function(file, h=7, w=7, lattice=TRUE, ...) {
             cex.lab=cex.lab, cex.axis=cex.axis, ...)
         if(multi) par(mfrow=mfrow)
       }
-  
-  spar(...)
+  dotlist <- list(...)
+  if(length(dotlist))
+    dotlist <- dotlist[names(dotlist) %in% names(par())]
+  do.call(spar, dotlist)
   if(lattice) latticeInit()
   invisible()
 }
@@ -388,18 +417,49 @@ endPlot <- function() {
   invisible()
 }
 
+#' Issue LaTeX section and/or subsection in appendix
+#'
+#' This is useful for copying section and subsection titles in the main body of the report to the appendix, to help in navigating supporting tables.  LaTeX backslash characters need to be doubled.
+#'
+#' @param section a character string that will cause a section command to be added to app.tex
+#' @param subsection a character string that will cause a subsection command to be added to app.tex
+#' @param main set to \code{TRUE} to also write a section or subsection command to the console to be used in building the main report body (graphical section), in which case you should also specify \code{panel} if option \code{texdir} is not an empty string
+#' @param panel panel string; must be given if \code{main=TRUE} and option \code{texdir} is not \code{""}
+#' @export
+
+appsection <- function(section=NULL, subsection=NULL, main=FALSE, panel='') {
+  o <- getgreportOption()
+  texdir   <- o$texdir
+  if(main) {
+    texwhere <- o$texwhere
+    file <- if(texwhere == '') '' else sprintf('%s/%s.tex', texdir, panel)
+    if(length(section))    cat('\\section{', section, '}\n',
+                               sep='', file=file, append=TRUE)
+    if(length(subsection)) cat('\\subsection{', subsection, '}\n',
+                               sep='', file=file, append=TRUE)
+  }
+  file  <- sprintf('%s/app.tex', texdir)
+  if(length(section))    cat('\\section{', section, '}\n',
+                             sep='', file=file, append=TRUE)
+  if(length(subsection)) cat('\\subsection{', subsection, '}\n',
+                             sep='', file=file, append=TRUE)
+  invisible()
+}
+
 #' Change First Letters to Upper Case
 #'
-#' Changes the first letter of each word in a string to upper case, keeping selected words in lower case
+#' Changes the first letter of each word in a string to upper case, keeping selected words in lower case.  Words containing at least 2 capital letters are kept as-is.
 #'
 #' @param txt a character vector
+#' @param lower set to \code{TRUE} to make only the very first letter of the string upper case, and to keep words with at least 2 capital letters in their original form
+#' @param alllower set to \code{TRUE} to make every word start with lower case unless it has at least 2 caps
 #' @references
 #' \url{http://lanecc.libguides.com/content.php?pid=38483&sid=295540}, \url{http://en.wikipedia.org/wiki/Letter_case#Headings_and_publication_titles}, \url{http://titlecapitalization.com}
 #' @export
 #' @examples
 #' upFirst(c('this and that','that is Beyond question'))
 
-upFirst <- function(txt) {
+upFirst <- function(txt, lower=FALSE, alllower=FALSE) {
   f <- function(x) {
   notcap <- c('a', 'about', 'above', 'across', 'after', 'against',
                 'along', 'among', 'an', 'and', 'around', 'as', 'at',
@@ -414,14 +474,22 @@ upFirst <- function(txt) {
                 'to', 'toward', 'towards', 'under', 'underneath',
                 'unlike', 'until', 'up', 'upon', 'via', 'vs.', 'when',
                 'with', 'within', 'without', 'worth', 'yet')
-  cap <- c('mi', 'gi', 'ecg', 'ekg', 'cad', 'ccta', 'lm', 'hf', 'i', 'ii',
-           'iii', 'iv', 'iii-iv', 'ii-iv', 'i-iv', 'nyha')
-  s <- strsplit(tolower(x), " ")[[1]]
-  w <- (1 : length(s)) == 1 | s %nin% notcap
-  s[w] <- paste(toupper(substring(s[w], 1,1)), substring(s[w], 2),
-                sep="")
-  w <- tolower(s) %in% cap
-  s[w] <- toupper(s[w])
+  s <- strsplit(x, " ")[[1]]
+  ## Find words that have more than one upper case letter; assume these
+  ## are acronyms that need capitalization preserved
+  a <- grepl('[A-Z]{1,}.*[A-Z]{1,}', s)
+  s <- if(alllower)
+         ifelse(a, s, tolower(s))
+  else if(lower)
+         ifelse(a, s, ifelse((1 : length(s)) == 1,
+                             paste(toupper(substring(s, 1, 1)),
+                                   tolower(substring(s, 2)), sep=''),
+                             tolower(s)))
+       else
+         ifelse(a, s, ifelse((1 : length(s)) == 1 | s %nin% notcap,
+                             paste(toupper(substring(s, 1, 1)),
+                                   tolower(substring(s, 2)), sep=''),
+                             tolower(s)))
   paste(s, collapse=' ')
 }
   for(i in 1 : length(txt)) txt[i] <- f(txt[i])

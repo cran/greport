@@ -19,6 +19,8 @@
 #' @param mfrow numeric 2-vector, used if \code{multi=FALSE}.  If not specified, default plot matrix layout will be figured.
 #' @param y.n.risk used if \code{what="1-S"}, to specify \code{y} coordinate for putting numbers at risk, typically below the \code{x}-axis label
 #' @param bot number of spaces to reserve at bottom of plot for numbers at risk, if \code{what="1-S"}
+#' @param aehaz logical.  Set to \code{FALSE} to not print number of events and hazard rate on plots.
+#' @param times numeric vector.  If specified, prints cumulative incidence probabilities at those times on the plots.
 #' @param append logical. If \code{TRUE} output will be appended instead of overwritten.
 #' @param \dots ignored
 #' @export
@@ -43,8 +45,8 @@ survReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
                        ylab=NULL, what=c('S', '1-S'),
                        conf=c('diffbands', 'bands', 'bars', 'none'),
                        panel='surv', subpanel=NULL, head=NULL, tail=NULL,
-                       h=3, w=4.5, multi=FALSE, mfrow=NULL, y.n.risk=-.5,
-                       bot=2, append=FALSE, ...)
+                       h=3, w=4.5, multi=FALSE, mfrow=NULL, y.n.risk=0,
+                       bot=2, aehaz=TRUE, times=NULL, append=FALSE, ...)
 {
   if(grepl('[^a-zA-Z-]', panel))
     stop('panel must contain only A-Z a-z -')
@@ -73,7 +75,7 @@ survReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
   if(length(X)) {
     x <- X[[1]]
     namx <- names(X)[1]
-    labx  <- tolower(ifelse(label(x) == '', namx, label(x)))
+    labx  <- upFirst(ifelse(label(x) == '', namx, label(x)), alllower=TRUE)
   }
 
   Nobs <- nobsY(formula, group=getgreportOption('tx.var'),
@@ -100,7 +102,7 @@ survReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
       lwd <- gro$tx.lwd
     }
     else {
-      col <- rep(c(gray(c(0, .7)), 'blue', 'red', 'green'), length=ng)
+      col <- rep(gro$nontx.col, length=ng)
       lwd <- rep(c(1, 3), length=ng)
     }
   } else {
@@ -113,19 +115,20 @@ survReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
   evlab <- character(ny)
   for(i in 1 : ny) {
     y <- Y[[i]]
-    evlab[i] <- tolower(label(y))
-    no <- nrow(y[! is.na(y)])
+    evlab[i] <- upFirst(label(y), alllower=TRUE)
+    no <- c(randomized = nrow(y[! is.na(y)]))
     if(multi) {
       lbi <- paste(lb, i, sep='-')
       startPlot(lbi, h=h, w=w, bot=if(what=='1-S') bot else 0, lattice=FALSE, ...)
     }
     yl <- if(length(ylab)) ylab else {
-      yl <- upFirst(evlab[i])
+      yl <- evlab[i]
       if(what == 'S') paste(yl, '-Free Probability', sep='')
        else paste('Incidence of', yl)
     }
 
     s <- npsurv(y ~ x)
+    if(conf == 'diffbands' && length(s$strata) < 2) conf <- 'bands'
     if(x.is.tx) {
       no        <- c(no, s$n)
       names(no) <- c('randomized', levels(x))
@@ -135,13 +138,16 @@ survReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
                n.risk=TRUE, conf=conf, lwd=lwd,
                lty=1, col=col, ylab=yl,
                label.curves=list(keys='lines', key.opts=list(bty='n')),
-               levels.only=TRUE, ...)
+               levels.only=TRUE, aehaz=aehaz, times=times, ...)
     else
       survplot(s, fun=function(y) 1 - y,
                n.risk=TRUE, y.n.risk=y.n.risk, conf=conf, lwd=lwd,
                lty=1, col=col, ylab=yl,
                label.curves=list(keys='lines', key.opts=list(bty='n')),
-               levels.only=TRUE, ...)
+               levels.only=TRUE, aehaz=aehaz, times=times, ...)
+
+    capconf <- if(conf == 'diffbands') ', along with half-height of 0.95 confidence limits centered at survival estimate midpoints. $N$=' else
+    ', along with 0.95 confidence bands.  $N$='
     
     if(multi) {
       endPlot()
@@ -149,9 +155,7 @@ survReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
       shortcap <- paste(shortcap, 'for', evlab[i])
       if(length(labx))
         shortcap <- paste(shortcap, 'stratified by', labx)
-      cap <- paste(shortcap,
-                   ', along with half-height of 0.95 confidence limits centered at survival estimate midpoints. $N$=', no[1],
-                   '. ', tail, sep='')
+      cap <- paste(shortcap, capconf, no[1], '. ', tail, sep='')
       dNeedle(sampleFrac(no, Nobs), name='lttsurv', file=file)
       cap <- sprintf('%s~\\hfill\\lttsurv', cap)
       putFig(panel=panel, name=lbi, caption=shortcap, longcaption=cap)
@@ -173,8 +177,7 @@ survReport <- function(formula, data=NULL, subset=NULL, na.action=na.retain,
     shortcap <- paste(shortcap, 'for', past(evlab))
     if(length(labx))
       shortcap <- paste(shortcap, 'stratified by', labx)
-    cap <- paste(shortcap,
-                 ', along with half-height of 0.95 confidence limits centered at survival estimate midpoints. $N$=', nobs[1], '. ', tail, sep='')
+    cap <- paste(shortcap, capconf, nobs[1], '. ', tail, sep='')
     dNeedle(sampleFrac(nobs, Nobs), name='lttsurv', file=file)
     cap <- sprintf('%s~\\hfill\\lttsurv', cap)
     putFig(panel=panel, name=lb, caption=shortcap, longcaption=cap)

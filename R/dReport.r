@@ -10,6 +10,7 @@
 #' @param byx.type set to \code{"quantiles"} to show vertical quantile intervals of \code{y} at each \code{x} for when \code{what="byx"} and the \code{y} variable is continuous numeric, or set \code{byx.type="violin"} (the default) to plot half-violin plots at each \code{x}.
 #' @param violinbox set to \code{TRUE} to add violin plots to box plots
 #' @param violinbox.opts a list to pass to \code{panel.violin}
+#' @param summaryPsort set to \code{TRUE} to sort categories in descending order of frequencies
 #' @param fun a function that takes individual response variables (which may be matrices, as in \code{\link[survival]{Surv}} objects) and creates one or more summary statistics that will be computed while the resulting data frame is being collapsed to one row per condition.  Dot charts are drawn when \code{fun} is given.
 #' @param data data frame
 #' @param subset a subsetting epression for the entire analysis
@@ -26,6 +27,7 @@
 #' @param append logical.  Set to \code{FALSE} to start a new panel
 #' @param sopts list specifying extra arguments to pass to \code{bpplotM}, \code{summaryP}, or \code{summaryS}
 #' @param popts list specifying extra arguments to pass to a plot method.  One example is \code{text.at} to specify some number beyond \code{xlim[2]} to leave extra space for numerators and denominators when using \code{summaryP} for categorical analysis variables.  Another common use is for example \code{popts=list(layout=c(columns,rows))} to be used in rendering \code{lattice} plots.  \code{key} and \code{panel} are also frequently used.
+#' @param lattice set to \code{TRUE} to use \code{lattice} instead of \code{ggplot2} for proportions.  When this option is in effect, numerators and denominators are shown.
 #' @export
 #' @examples
 #' # See test.Rnw in tests directory
@@ -37,10 +39,11 @@ dReport <-
            violinbox=TRUE,
            violinbox.opts=list(col=adjustcolor('blue', alpha.f=.25),
              border=FALSE),
+           summaryPsort=FALSE,
            fun=NULL, data=NULL, subset=NULL, na.action=na.retain,
            panel = 'desc', subpanel=NULL, head=NULL, tail=NULL,
            continuous=10, h=5.5, w=5.5, outerlabels=TRUE, append=FALSE,
-           sopts=NULL, popts=NULL)
+           sopts=NULL, popts=NULL, lattice=FALSE)
 {
   mwhat    <- missing(what)
   what     <- match.arg(what)
@@ -51,6 +54,12 @@ dReport <-
     stop('panel must contain only A-Z a-z -')
   if(length(subpanel) && grepl('[^a-zA-Z-]', subpanel))
     stop('subpanel must contain only A-Z a-z -')
+
+#  rel          <- ggplot2::rel
+#  theme        <- ggplot2::theme
+#  element_text <- ggplot2::element_text
+#  guides       <- ggplot2::guides
+#  guide_legend <- ggplot2::guide_legend
   
   center <- 'centerline'
   legend <- NULL
@@ -73,6 +82,10 @@ dReport <-
   ## specials counts from lhs variables
   wid <- sr$id
   if(length(wid)) wid <- wid - ncol(Y)
+
+  glevels <- if(length(groups)) levels(X[[groups]])
+  manygroups <- length(glevels) > 3
+  nstrata <- 1
   
   if(mwhat) {
     if(length(fun)) what <- 'xy'
@@ -197,18 +210,20 @@ dReport <-
       yvar <- unique(as.character(r$yvar))
       w <- latex(r[colnames(r) != 'yvar'],
                  table.env=FALSE, file=file, append=TRUE, rowlabel='',
+                 landscape=FALSE, size=szg,
                  rowname=rep('', nrow(r)),
                  cgroup=c('', lev),
                  n.cgroup=c(1, rep(ncol(s$y), nl)),
-                 rgroup=ylab[yvar], size='scriptsize',
+                 rgroup=ylab[yvar],
                  colheads=c(upFirst(xv[1]), rep(names(sk), nl)), center=center)
     }
   else {
     yvar <- unique(as.character(s$yvar))
     w <- latex(s[colnames(s) != 'yvar'],
                table.env=FALSE, file=file, append=TRUE,
+               landscape=FALSE,
                rowlabel='', rowname=rep('', nrow(s)),
-               rgroup=ylab[yvar], size='small',
+               rgroup=ylab[yvar], size=szg,
                colheads=c(upFirst(xv[1]), names(sk)), center=center) 
   }
     if(length(xv) == 2) 'full' else 'mini'
@@ -238,6 +253,15 @@ dReport <-
   if(getgreportOption('texwhere') == '') file <- ''
    else if(!append) cat('', file=file)
 
+  cat('%dReport:', deparse(formula), ' what:', what, ' group levels:',
+      paste(glevels, collapse=','), '\n',
+      file=file, append=TRUE)
+
+  if(what == 'box' && ! length(groups) && ncol(X) == 1)
+    manygroups <- length(levels(X[[1]])) > 3
+
+  szg <- if(manygroups) 'smaller[2]' else 'smaller'
+
   lb <- sprintf('%s-%s', panel, what)
   if(length(subpanel)) lb <- paste(lb, subpanel, sep='-')
   lbn <- gsub('\\.', '', gsub('-', '', lb))
@@ -252,7 +276,8 @@ dReport <-
   } else paste('for',
                if(length(ylabs) < 7) past(ylabs) else
                paste(length(ylabs), 'variables'))
-  al <- tolower(a)
+
+  al <- upFirst(a, alllower=TRUE)
   al <- latexTranslate(al)
   
   if(!length(head))
@@ -297,7 +322,6 @@ dReport <-
              outerlabels=outerlabels)
   key <- popts$key
   if(! length(key) && length(groups)) {
-    glevels <- levels(X[[groups]])
     klines <- list(x=.6, y=-.07, cex=.8,
                    columns=length(glevels), lines=TRUE, points=FALSE)
     key=switch(what,
@@ -320,9 +344,34 @@ dReport <-
            print(s)
          },
          proportions = {
+           sopts$sort <- summaryPsort
            s <- do.call('summaryP', c(dl, sopts))
-           p <- do.call('plot', c(list(x=s, groups=groups), popts))
-           print(p)
+           if(lattice) p <- do.call('plot', c(list(x=s, groups=groups), popts))
+           else {
+             popts <- if(length(groups) == 1 && groups == tvar)
+               c(popts, list(col  =getgreportOption('tx.col'),
+                             shape=getgreportOption('tx.pch'),
+                             abblen=12))
+             else list(col=getgreportOption('nontx.col'), abblen=12)
+             popts$addlayer <-
+               theme(axis.text.x =
+                       element_text(size = rel(0.8), angle=-45,
+                                    hjust=0, vjust=1),
+                     strip.text.x=element_text(size=rel(0.75), color='blue'),
+                     strip.text.y=element_text(size=rel(0.75), color='blue',
+                       angle=0),
+                     legend.position='bottom')
+             p <- do.call('ggplot', c(list(data=s, groups=groups), popts))
+             fnvar <- attr(p, 'fnvar')
+             if(length(fnvar)) tail <- paste(tail, ' ', fnvar, '.', sep='')
+             if(length(groups)) p <- p + guides(color=guide_legend(title=''),
+                                                shape=guide_legend(title=''))
+           }
+           presult <- tryCatch(
+             colorFacet(p,
+                        col=adjustcolor('blue', alpha.f=0.18)),
+             error=function(e) list(fail=TRUE)   )
+           if(length(presult$fail) && presult$fail) print(p)
          },
          xy = {
            s <- do.call('summaryS', c(dl, list(fun=fun), sopts))
@@ -360,22 +409,26 @@ dReport <-
   if(substring(what, 1, 3) == 'byx')
     poptab <- latexit(s, what, byx.type, file=file)
   else if(what == 'proportions') {
-    z <- latex(s, groups=groups, size='small', file=file, append=TRUE)
-    poptab <- if(attr(z, 'ngrouplevels') > 3) 'full' else 'mini'
+    z <- latex(s, groups=groups, size=szg, file=file, append=TRUE,
+               landscape=FALSE)   ## may sometimes need landscape=manygroups
+    nstrata <- attr(z, 'nstrata')
+    poptab <- if(manygroups) 'full' else 'mini'
   }
   else if(what == 'box' || (what == 'xy' && length(fun))) {
     S <- summaryM(formula.no.id, data=data, subset=subset, na.action=na.action,
                   test=FALSE, groups=groups)
     z <- latex(S, table.env=FALSE, file=file, append=TRUE, prmsd=TRUE,
                npct='both', exclude1=FALSE, middle.bold=TRUE, center=center,
-               round='auto', insert.bottom=FALSE)
+               round='auto', insert.bottom=FALSE, size=szg,
+               landscape=manygroups)
     poptab <- if(length(S$group.freq) > 3) 'full' else 'mini'
     legend <- attr(z, 'legend')
     legend <- if(! length(legend)) ''
      else paste('. ', paste(legend, collapse='\n'), sep='')
+    nstrata <- attr(z, 'nstrata')
   }
   cat('}\n', file=file, append=TRUE)
-  
+
   nobs <- Nobs$nobs
   r <- range(nobs)
   nn <- if(r[1] == r[2]) r[1] else paste(r[1], 'to', r[2])
@@ -393,6 +446,8 @@ dReport <-
          longcaption = cap,  tcaption=tcap,
          tlongcaption = paste(tcap, legend, sep=''),
          poptable= if(length(poptab)) paste('\\', popname, sep=''),
-         popfull = length(poptab) && poptab == 'full')
+         popfull = length(poptab) && poptab == 'full',
+         outtable = nstrata > 1 || manygroups)
+  # hyperref doesn't work with multiple tabulars (runs off page) or landscape
   invisible()
 }
