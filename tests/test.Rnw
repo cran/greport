@@ -1,5 +1,8 @@
 % Usage: Copy test.Rnw to a temporary directory and make directories
 % gentex and pdf under it, then run knitr on test.Rnw
+% Best to use the spaper and knitrl LaTeX packages, which will also do away with 
+% the need for some of the preamble below
+
 \documentclass{article}
 \usepackage{fancyhdr}
 \usepackage{graphicx}
@@ -20,7 +23,8 @@
 % hyperlinked items (for screen only)
   
 \def\poptype{1}
-% 0=no popup tooltips  1=ocgtools  2=movable popups
+% 0=no popup tooltips  1=ocgtools  2=movable popups   3=in-line tiny tables
+% with no popups
 \usepackage{greport}   % must appear after \usepackage{hyperref}
 
 \graphicspath{{pdf/}}
@@ -41,8 +45,8 @@
 <<echo=FALSE>>=
 echo <- TRUE   # show code
 # echo <- FALSE  # hide code
-knitrSet(echo=echo, results='hide')
 require(greport)
+knitrSet(echo=echo, results='hide')
 @
 
 <<>>=
@@ -384,6 +388,11 @@ set.seed(1)
 n <- 400
 dat <- data.frame(t1=runif(n, 2, 5), t2=runif(n, 2, 5),
                   e1=rbinom(n, 1, .5), e2=rbinom(n, 1, .5),
+                  cr1=factor(sample(c('cancer','heart','censor'), n, TRUE),
+                             c('censor', 'cancer', 'heart')),
+                  cr2=factor(sample(c('gastric','diabetic','trauma', 'censor'),
+                                    n, TRUE),
+                             c('censor', 'diabetic', 'gastric', 'trauma')),
                   treat=sample(c('a','b'), n, TRUE))
 dat <- upData(dat,
               labels=c(t1='Time to operation',
@@ -408,6 +417,11 @@ survReport(Surv(t1, e1) + Surv(t2, e2) ~ treat, data=dat,
 survReport(Surv(t1, e1) + Surv(t2, e2) ~ 1, data=dat,
            multi=TRUE, subpanel='multinostrat', append=TRUE, ps=9, what='1-S',
            y.n.risk=-.02)
+
+# Competing risk analysis
+survReport(Surv(t1, cr1) + Surv(t2, cr2) ~ treat, data=dat,
+           cause=list(c('cancer', 'heart'), 'diabetic'),
+           subpanel='cr', append=TRUE, w=4.75, h=6, ps=8, multi=TRUE)
 @ 
 \clearpage
 \section{Adverse Events}

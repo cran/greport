@@ -1,8 +1,9 @@
-% Usage: \def\poptype{0:no popup tooltips  1:ocgtools  2:movable popups}
+% Usage: \def\poptype{0:no popup tooltips  1:ocgtools  2:movable popups
+%                     3:tiny inline popups}
 %        \usepackage{greport}
 
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{greport}[2014/02/19 Support for R greport reports]
+\ProvidesPackage{greport}[2016/04/07 Support for R greport reports]
 
 % User must define LaTeX macros \tooltipn, \tooltipm, and \tooltipw
 % for narrow, medium, and wide LaTeX objects to pop up
@@ -15,12 +16,11 @@
   \def\popnotation{}
   \fi
 \ifnum\poptype=1
+  \usepackage{ocg-p}   % keeps ocgtools from loading ocg package
   \usepackage[mouseover]{ocgtools}
   \usepackage{xcolor,pbox}
-  % Needs the 3 packages the user must install using e.g.:
-  % getlatex acrotex
+  % Needs this package the user must install using e.g.:
   % getlatex ocgtools
-  % getlatexfrom asymptote http://mirrors.ctan.org/graphics
   % Use |-> symbol for popup rather than coloring object blue
   \def\ocgtextstart{}
   \def\ocgtextend{~\textcolor[gray]{0.5}{$\mapsto$}}
@@ -38,8 +38,7 @@
 
 \ifnum\poptype=2
   \usepackage{tooltip,pbox}
-  % For movable tooltips, download tooltip.sty, move to
-  % /usr/share/texmf/tex/latex and run mktexlsr
+  % For movable tooltips, download tooltip.sty, move to ~/texmf/tex
   % Note: tooltip expands width pretty well for non-wide objects
   \newcommand{\tooltipn}[2]{\tooltip{#1~\textcolor[gray]{0.5}{$\mapsto$}}{%
        \pbox{7in}{#2}}}
@@ -54,6 +53,14 @@
        % \parbox[c]{6.5in}{#2}}}
  \def\hsepline{}
 \fi
+
+\ifnum\poptype=3
+  \newcommand{\tooltipn}[2]{{\\\tiny #2}\hfill #1}
+  \newcommand{\tooltipm}[2]{{\\\tiny #2}\hfill #1}
+  \newcommand{\tooltipw}[2]{{\\\tiny #2}\hfill #1}
+  \def\hsepline{}   %{\hrule}
+  \def\popnotation{}
+  \fi
 
 \typeout{Using poptype=\poptype}
 
@@ -77,5 +84,4 @@
 \endinput
 
 % To install:
-sudo cp greport.sty /usr/share/texlive/texmf-dist/tex/latex/.
-sudo mktexlsr
+sudo cp greport.sty ~/texmf/tex/

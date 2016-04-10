@@ -14,6 +14,7 @@
 #' @param targetDate \code{Date} or character vector corresponding to \code{targetN}
 #' @param closeDate \code{Date} or characterstring.  Used for randomizations per month and per site-month - contains the dataset closing date to be able to compute the number of dates that a group (country, site, etc.) has been online since randomizating its first subject.
 #' @param enrollmax numeric specifying the upper y-axis limit for cumulative enrollment when not zoomed
+#' @param studynos logical.  Set to \code{FALSE} to suppress summary study numbers table.
 #' @param minrand integer.  Minimum number of randomized subjects a country must have before a box plot of time to randomization is included.
 #' @param panel character string.  Name of panel, which goes into file base names and figure labels for cross-referencing.
 #' @param h numeric.  Height of ordinary plots, in inches.
@@ -30,7 +31,8 @@
 accrualReport <-
   function(formula, data=NULL, subset=NULL, na.action=na.retain,
            dateRange=NULL, zoom=NULL, targetN=NULL, targetDate=NULL,
-           closeDate=NULL, enrollmax=NULL, minrand=10, panel = 'accrual',
+           closeDate=NULL, enrollmax=NULL, studynos=TRUE,
+           minrand=10, panel = 'accrual',
            h=2.5, w=3.75, hb=5, wb=5, hdot=3.5)
 {
   formula <- Formula(formula)
@@ -158,7 +160,7 @@ accrualReport <-
                 'Subjects randomized per site per month')
     }
   }
-  if(length(z)) {
+  if(studynos && length(z)) {
     z <- data.frame(Number=z, Category=k)
     u <- latex(z, file=file, append=TRUE, rowname=NULL,
                col.just=c('r','l'), where='!htbp',
@@ -206,10 +208,19 @@ accrualReport <-
     lb <- sprintf('%s-cumulative-%s', panel, lab)
     shortcap <- sprintf("Subjects %s over time", lab)
     cap <- if(length(target))
-      sprintf('.  The solid back line depicts the cumulative frequency.  The dotted line represent targets.', lab) else ''
+             sprintf('.  The solid back line depicts the cumulative frequency.  The dotted line represent targets.', lab) else ''
+    pzoom <- length(zoom) > 0
+    if(pzoom) {
+      zoom <- as.Date(zoom)
+      cap <- paste(cap, sprintf(
+        'The plot is zoomed to show %s--%s in the right panel.  The zoomed interval is depicted with vertical grayscale lines in the left panel',
+        zoom[1], zoom[2]))
+    }
+
     longcap <- paste(shortcap, cap, '~\\hfill\\lttc', sep = '')
 
-    startPlot(lb, h=h, w=w, lattice=FALSE)
+    startPlot(lb, h=h, w=w * (1 + 0.75 * pzoom), lattice=FALSE)
+    par(mfrow=c(1, 1 + pzoom), mar=c(4,3.5,2,1))
     Ecdf(as.numeric(y), what='f', xlab=sprintf('Date %s', upFirst(lab)),
          ylab='Cumulative Number',
          subtitles=FALSE, axes=FALSE,
@@ -221,16 +232,9 @@ accrualReport <-
     axisDate(dr)
     if(length(target)) lines(dtarget, target, lty=3, lwd=1)
     box(lwd=.75, col=gray(.4))
-    endPlot()
-    ltt(switch(lab, enrolled=c(enrolled=sumnna),
-               randomized=c(enrolled=sumnna, randomized=sumnna)), 'lttc')
-    putFig(panel = panel, name = lb, caption = shortcap,
-           longcaption = longcap)
     
-    if(length(zoom)) {
-      lb <- sprintf('%s-cumulative-%s-zoom', panel, lab)
-      startPlot(lb, h=h, w=w, lattice=FALSE)
-      zoom <- as.Date(zoom)
+    if(pzoom) {
+      abline(v=as.numeric(zoom), col=gray(.85))
       Ecdf(as.numeric(y), what='f', xlab=sprintf('Date %s', upFirst(lab)),
            ylab='Cumulative Number',
            subtitles=FALSE, axes=FALSE,
@@ -242,27 +246,22 @@ accrualReport <-
       axisDate(zoom)
       if(length(target)) lines(dtarget, target, lty=3, lwd=1)
       box(lwd=.5, col=gray(.4))
-      endPlot()
-      shortcap <- sprintf('%s, zoomed', shortcap)
-
-      cap <- sprintf("Subjects %s over time", lab)
-      if(length(target))
-        cap <- paste(cap, '. The solid back line depicts the cumulative frequency.  The dotted line represent targets.', sep='')
-      else cap <- paste(cap, '. ', sep='')
-      cap <- paste(cap, sprintf('The plot is zoomed to show %s--%s.~\\hfill\\lttc',
-                                zoom[1], zoom[2]))
-      putFig(panel = panel, name = lb, caption = shortcap,
-             longcaption = cap)
     }
+
+    endPlot()
+    ltt(switch(lab, enrolled=c(enrolled=sumnna),
+               randomized=c(enrolled=sumnna, randomized=sumnna)), 'lttc')
+    putFig(panel = panel, name = lb, caption = shortcap,
+           longcaption = longcap)
   }
 
   ## Extended box plots of time to randomization for randomized subjects
-  if(penroll && prandomize) {
+  if(penroll && prandomize && (pregion || pcountry)) {
+    x1 <- if(pregion)  X[[region]]
+    x2 <- if(pcountry) X[[country]]
     lb <- sprintf('%s-timetorand', panel)
     startPlot(lb, h=hb, w=wb, lattice=FALSE)
     y <- as.numeric(difftime(Y[[j]], Y[[enroll]], units='days'))
-    x1 <- if(pregion)  X[[region]]
-    x2 <- if(pcountry) X[[country]]
     use <- TRUE
     coexcl <- 0
     if(pcountry && minrand > 0) {
@@ -291,7 +290,10 @@ accrualReport <-
        else Days ~ 1
     popname <- '\\poptabledaysrand'
     cat(sprintf('\\def%s{\\protect\n', popname), file=file, append=TRUE)
-    rddata <- subset(data.frame(Days, x1=x1, x2=x2), ! is.na(Days))
+    rddata <- data.frame(Days)
+    if(length(x1)) rddata$x1 <- x1
+    if(length(x2)) rddata$x2 <- x2
+    rddata <- subset(rddata, ! is.na(Days))
     S <- summaryM(form, data=rddata, test=FALSE)
     z <- latex(S, table.env=FALSE, file=file, append=TRUE, prmsd=TRUE,
                middle.bold=TRUE, center='none', round=1, insert.bottom=FALSE)
@@ -405,7 +407,7 @@ accrualReport <-
                   ps=if(r == 2) 10 else 8, lattice=FALSE)
         ended <- FALSE
       }
-      g <- function(x) length(unique(x[! is.na(x)]))
+      gg <- function(x) length(unique(x[! is.na(x)]))
       
       if(type %in% c('permonth', 'persitemonth')) {
         ## Get country if there, otherwise region
@@ -457,12 +459,12 @@ accrualReport <-
                           mmonths    = mmonths[mg[group]],
                           gmonths    = gmonths[group])
         mg <- function(y) sum(y[, 1]) / y[1, 2]
-        g  <- function(y) sum(y[, 1]) / y[1, 3]
+        gg <- function(y) sum(y[, 1]) / y[1, 3]
       }
 
       switch(type,
              count = { y <- ! is.na(Y[[j]]); fun <- sum },
-             sites = { y <- X[[site]]; y[is.na(Y[[j]])] <- NA; fun <- g },
+             sites = { y <- X[[site]]; y[is.na(Y[[j]])] <- NA; fun <- gg },
              fracrand     = { y <- ! is.na(Y[[j]]); fun <- mean },
              permonth     = { },
              persitemonth = { } )
@@ -472,7 +474,7 @@ accrualReport <-
       dat$y <- y
       fmt <- function(x) format(round(x, 2))
       if(type %in% c('permonth', 'persitemonth'))
-        summaryD(form, fun=g, funm=mg, data=dat, vals=TRUE, fmtvals=fmt,
+        summaryD(form, fun=gg, funm=mg, data=dat, vals=TRUE, fmtvals=fmt,
                  xlab=switch(type,
                    permonth     = 'Number Randomized Per Month',
                    persitemonth = 'Number Randomized Per Site Per Month'))

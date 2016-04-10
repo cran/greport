@@ -85,6 +85,7 @@ mfrowSuggest <- function(n, small=FALSE) {
 #'  \item{\code{pdfdir}:}{name of subdirectory in which to write \code{pdf} graphics}
 #'  \item{\code{texdir}:}{name of subdirectory in which to write \code{LaTeX} code}
 #'  \item{\code{texwhere}:}{default is \code{"texdir"} to use location specified by \code{texdir}.  Set to \code{""} to write generated non-appendix LaTeX code to the console as expected by \code{knitr}}
+#'	\item{\code{defs}"}{fully qualified file name to which to write LaTeX macro definitions such as poptables}
 #' }
 setgreportOption <- function(...) {
   default <- getOption('greport')
@@ -102,8 +103,8 @@ setgreportOption <- function(...) {
            tx.var = '', er.col = NULL, alpha.f = 0.7,
            denom = c(enrolled=NA, randomized=NA),
            tablelink = 'hyperref', figenv='figure', figpos='htb!',
-           gtype = 'pdf', pdfdir='pdf', texdir='gentex',
-           texwhere='texdir')
+           gtype = 'pdf', pdfdir='pdf', texdir='gentex', 
+           texwhere='texdir', defs='gentex/defs.tex')
 
   if(length(opts)) {
     if(any(names(opts) %nin% names(default)))
@@ -266,7 +267,7 @@ dNeedle <- function(sf, name, file='', append=TRUE) {
 #' @param longcaption character. Long caption for figure.
 #' @param tcaption character.  Short caption for supporting table.
 #' @param tlongcaption character.  Long caption for supporting table.
-#' @param poptable an optional character string containing LaTeX code that will be used as a pop-up tool tip for the figure (typically a tabular)
+#' @param poptable an optional character string containing LaTeX code that will be used as a pop-up tool tip for the figure (typically a tabular).  Set to \code{NULL} to suppress supplemental tables that back up figures.
 #' @param popfull set to \code{TRUE} to make the pop-up be full-page
 #' @param sidecap set to \code{TRUE} (only applies if \code{greportOption(figenv="SCfigure")}) to assume the figure is narrow and to use side captions
 #' @param outtable set to \code{TRUE} to only have the caption and hyperlink to graphics in a LaTeX table environment and to leave the tabulars to free-standing LaTeX markup.  This is useful when the table is long, to prevent hyperlinking from making the table run outside the visable area.  Instead of the hyperlink area being the whole table, it will be the caption.  A \code{clearpage} is issued after the tabular.
@@ -376,7 +377,7 @@ putFig <- function(panel, name, caption=NULL, longcaption=NULL,
 #' @export
 
 startPlot <- function(file, h=7, w=7, lattice=TRUE, ...) {
-  gtype <- getgreportOption('gtype')
+  gtype  <- getgreportOption('gtype')
   pdfdir <- getgreportOption('pdfdir')
   if(! length(gtype) || gtype != 'interactive') {
     file <- paste(pdfdir, '/', gsub('\\.', '-', file), '.pdf', sep='')
@@ -400,9 +401,11 @@ startPlot <- function(file, h=7, w=7, lattice=TRUE, ...) {
         if(multi) par(mfrow=mfrow)
       }
   dotlist <- list(...)
-  if(length(dotlist))
-    dotlist <- dotlist[names(dotlist) %in% names(par())]
-  do.call(spar, dotlist)
+  if(length(dotlist)) {
+    allow <- union(names(par()), setdiff(names(formals(spar)), '...'))
+    dotlist <- dotlist[names(dotlist) %in% allow]
+  }
+  do.call('spar', dotlist)
   if(lattice) latticeInit()
   invisible()
 }
@@ -444,56 +447,6 @@ appsection <- function(section=NULL, subsection=NULL, main=FALSE, panel='') {
   if(length(subsection)) cat('\\subsection{', subsection, '}\n',
                              sep='', file=file, append=TRUE)
   invisible()
-}
-
-#' Change First Letters to Upper Case
-#'
-#' Changes the first letter of each word in a string to upper case, keeping selected words in lower case.  Words containing at least 2 capital letters are kept as-is.
-#'
-#' @param txt a character vector
-#' @param lower set to \code{TRUE} to make only the very first letter of the string upper case, and to keep words with at least 2 capital letters in their original form
-#' @param alllower set to \code{TRUE} to make every word start with lower case unless it has at least 2 caps
-#' @references
-#' \url{http://lanecc.libguides.com/content.php?pid=38483&sid=295540}, \url{http://en.wikipedia.org/wiki/Letter_case#Headings_and_publication_titles}, \url{http://titlecapitalization.com}
-#' @export
-#' @examples
-#' upFirst(c('this and that','that is Beyond question'))
-
-upFirst <- function(txt, lower=FALSE, alllower=FALSE) {
-  f <- function(x) {
-  notcap <- c('a', 'about', 'above', 'across', 'after', 'against',
-                'along', 'among', 'an', 'and', 'around', 'as', 'at',
-                'before', 'behind', 'below', 'beneath', 'beside',
-                'besides', 'between', 'beyond', 'but', 'by', 'despite',
-                'down', 'during', 'except', 'following', 'for', 'from',
-                'in', 'inside', 'into', 'like', 'mid', 'minus', 'near',
-                'next', 'nor', 'of', 'off', 'on', 'onto', 'opposite',
-                'or', 'out', 'outside', 'over', 'past', 'per', 'plus',
-                'regarding', 'round', 'save', 'since', 'so', 'than',
-                'the', 'through', 'throughout', 'till', 'times',
-                'to', 'toward', 'towards', 'under', 'underneath',
-                'unlike', 'until', 'up', 'upon', 'via', 'vs.', 'when',
-                'with', 'within', 'without', 'worth', 'yet')
-  s <- strsplit(x, " ")[[1]]
-  ## Find words that have more than one upper case letter; assume these
-  ## are acronyms that need capitalization preserved
-  a <- grepl('[A-Z]{1,}.*[A-Z]{1,}', s)
-  s <- if(alllower)
-         ifelse(a, s, tolower(s))
-  else if(lower)
-         ifelse(a, s, ifelse((1 : length(s)) == 1,
-                             paste(toupper(substring(s, 1, 1)),
-                                   tolower(substring(s, 2)), sep=''),
-                             tolower(s)))
-       else
-         ifelse(a, s, ifelse((1 : length(s)) == 1 | s %nin% notcap,
-                             paste(toupper(substring(s, 1, 1)),
-                                   tolower(substring(s, 2)), sep=''),
-                             tolower(s)))
-  paste(s, collapse=' ')
-}
-  for(i in 1 : length(txt)) txt[i] <- f(txt[i])
-  txt
 }
 
 #' Merge Multiple Data Frames or Data Tables
