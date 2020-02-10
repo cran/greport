@@ -2,9 +2,8 @@
 % Please edit documentation in R/greport-package.r
 \docType{package}
 \name{greport}
-\alias{.noGenerics}
 \alias{greport}
-\alias{greport-package}
+\alias{.noGenerics}
 \alias{package-greport}
 \title{Graphical Reporting for Clinical Trials}
 \format{An object of class \code{logical} of length 1.}
@@ -18,4 +17,3 @@ Graphical Reporting for Clinical Trials
 Frank E Harrell Jr \email{f.harrell@vanderbilt.edu}
 }
 \keyword{datasets}
-

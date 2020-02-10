@@ -18,4 +18,3 @@ appsection(section = NULL, subsection = NULL, main = FALSE, panel = "")
 \description{
 This is useful for copying section and subsection titles in the main body of the report to the appendix, to help in navigating supporting tables.  LaTeX backslash characters need to be doubled.
 }
-

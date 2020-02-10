@@ -85,7 +85,7 @@ mfrowSuggest <- function(n, small=FALSE) {
 #'  \item{\code{pdfdir}:}{name of subdirectory in which to write \code{pdf} graphics}
 #'  \item{\code{texdir}:}{name of subdirectory in which to write \code{LaTeX} code}
 #'  \item{\code{texwhere}:}{default is \code{"texdir"} to use location specified by \code{texdir}.  Set to \code{""} to write generated non-appendix LaTeX code to the console as expected by \code{knitr}}
-#'	\item{\code{defs}"}{fully qualified file name to which to write LaTeX macro definitions such as poptables}
+#'	\item{\code{defs}:}{fully qualified file name to which to write LaTeX macro definitions such as poptables}
 #' }
 setgreportOption <- function(...) {
   default <- getOption('greport')
@@ -250,6 +250,7 @@ sampleFrac <- function(n, nobsY=NULL, table=TRUE) {
 #' @param append set to \code{FALSE} to start a new \code{file}
 #' @export
 
+# Future: for html output: base64::img(pngNeedle(sf, col=co))
 dNeedle <- function(sf, name, file='', append=TRUE) {
   co <- getgreportOption(c('er.col', 'tx.col'))
   co <- c(co$er.col, co$tx.col)
@@ -466,6 +467,7 @@ appsection <- function(section=NULL, subsection=NULL, main=FALSE, panel='') {
 #' # For data.table, first file must be the master file and must
 #' # contain all ids that ever occur.  ids not in the master will
 #' # not be merged from other datasets.
+#' require(data.table)
 #' a <- data.table(a); setkey(a, sid)
 #' # data.table also does not allow duplicates without allow.cartesian=TRUE
 #' b <- data.table(sid=1:2, bp=c(120,130)); setkey(b, sid)
@@ -568,3 +570,70 @@ Merge <- function(..., id, all=TRUE, verbose=TRUE) {
   attr(M, 'info') <- info
   M
 }
+
+
+
+#' Mask Values of a Vector
+#'
+#' Modifies the value of a vector so as to mask the information by generating random data subject to constraints and keeping the length, type, label, and units attributes of the original variable.  For a binary numeric or logical variable a random vector with prevalence (by default) of 0.5 replaces the original.  For a factor variable, a random multinomial sample is drawn, with equal expected frequencies of all levels.  For a numeric variable, the range is preserved but the distribution is uniform over that range, and generated values are rounded by an amount equal to the minimum spacing between distinct values.  Character variables are just randomly reordered.  In the special case where the input vector contains only one unique non-NA value, the variable is assumed to be the type of variable where NA represents FALSE or "no", and the variable is replaced by a logical vector with the specified prevalence.
+#'
+#' @param x an input vector
+#' @param prev a numeric scalar specifying the prevalence for binary variables
+#' @param NAs if the variable contains \code{NA}s, keep the same expected proportion of \code{NA}s but distribute them randomly.  Otherwise, the new vector will have no missing values.
+#' @export
+
+maskVal <- function(x, prev=0.5, NAs=TRUE) {
+  lab <- attr(x, 'label')
+  un  <- attr(x, 'units')
+  n   <- length(x)
+  if(n == 0) return(x)
+  m <- sum(is.na(x))
+  if(m == n) return(x)
+  y <- if(m == 0) x else x[! is.na(x)]
+
+  if(length(unique(y)) == 1)
+    return(sample(c(FALSE, TRUE), n, replace=TRUE, prob=c(1 - prev, prev)))
+
+  if(is.logical(x))
+    x <- sample(c(FALSE,TRUE), n, replace=TRUE, prob=c(1 - prev, prev))
+  else
+    if(all(y %in% c(0,1)))
+      x <- sample(0:1, n, replace=TRUE, prob=c(1 - prev, prev))
+  else
+    if(is.factor(x))
+      x <- factor(sample(levels(x), n, replace=TRUE),
+                  levels=levels(x))
+  else
+    if(is.character(x)) x <- x[order(runif(n))]
+  else {
+    r <- range(y)
+    u <- runif(n, min=r[1], max=r[2])
+    x <- if(length(y) < 4) u
+         else {
+           d <- min(diff(sort(unique(y))))
+           pmax(r[1], pmin(r[2], d * round(u / d)))
+         }
+  }
+
+  if(NAs && m > 0) x[runif(n) < (m / n)] <- NA
+    
+  if(length(lab)) label(x) <- lab
+  if(length(un))  units(x) <- un
+  x
+}
+
+#' Mask Variables in a Data Frame
+#'
+#' Given a list of applicable variable names in a formula, runs \code{maskVal} on any variables in a data frame \code{x} whose name is found in \code{formula}.
+#'
+#' @param x an input data frame or data table
+#' @param formula a formula specifying the variables to perturb
+#' @param \dots parameters to pass to \code{maskVal}
+#' @export
+
+maskDframe <- function(x, formula, ...) {
+  for(v in intersect(all.vars(formula), names(x)))
+    x[[v]] <- maskVal(x[[v]], ...)
+  x
+}
+
