@@ -1,13 +1,13 @@
-4ab317544c551479f217a398a3bf80a0 *DESCRIPTION
+8b73ab18bbc3d25b9821aa46e98f6df3 *DESCRIPTION
 29f56ba5a264ec049e50f9419781457e *INDEX
 170c1bc64cf62ace6c2b454ef119c986 *NAMESPACE
-6bc0c9412592cb832c0ac00ac9a79499 *NEWS
+80d30088819e0956d7ac7e1719a0d7b7 *NEWS
 f9e1481ad5d02588a3bee3d5f0504853 *R/Misc.r
 f8c046c5d2e9b28bfa15c3bb11a9d767 *R/accrualReport.r
 7896e93bf744ad23352577f8426fdb60 *R/dReport.r
 dd39ac0ade5f8849b1635184474d3d4c *R/eReport.r
 8ac924325e8dac1747337f0700b35a4b *R/exReport.r
-c79c0c70d8fe067315b4c820144d4254 *R/greport-package.r
+cf31a516474057acd7db54afc0f5cdf3 *R/greport-package.r
 4063b500816e02246029686c56c7fa3a *R/nriskReport.r
 92868ba442a9e683275c460ede5b81de *R/survReport.r
 10fcc6607c99eaced058a092b5e7258c *R/todo/Misc.firsttry.r
@@ -39,7 +39,7 @@ b1e9c0d9d9cc275724d450bbe80e3fec *man/accrualReport.Rd
 5b6bfa8f6774a95a95d6e954a8604be2 *man/eReport.Rd
 68aa1f6dd403d1982bff69fab9aa9e4e *man/exReport.Rd
 2aba5191d0374654264f48d421fd136a *man/getgreportOption.Rd
-6056229f7e8185636aefd20d09eb14e9 *man/greport.Rd
+176418d465b3d776e13bc46ae5c3e02d *man/greport.Rd
 59870afe18bcb92d4042b87b689ffd21 *man/latticeInit.Rd
 2162bfd7982d58b05250be218a5644e6 *man/maskDframe.Rd
 c14abb3d456f5b622e0335c4c83cf277 *man/maskVal.Rd
